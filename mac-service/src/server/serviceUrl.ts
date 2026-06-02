@@ -117,7 +117,7 @@ function isLikelyPhysicalInterface(interfaceName: string): boolean {
 }
 
 function isLikelyVirtualInterface(interfaceName: string): boolean {
-  return /(virtual|vethernet|hyper-v|vmware|virtualbox|vbox|docker|wsl|vpn|tunnel|tap|tun|utun|tailscale|zerotier|bridge|br-|awdl|llw|bluetooth)/i.test(interfaceName);
+  return /(virtual|vethernet|hyper-v|vmware|virtualbox|vbox|docker|wsl|vpn|tunnel|tap|tun|utun|tailscale|zerotier|bridge|br-|awdl|llw|bluetooth|wi-?fi direct|本地连接\*|local area connection\*)/i.test(interfaceName);
 }
 
 function scoreLanIpv4Address(interfaceName: string, address: string): number {
@@ -132,7 +132,7 @@ function scoreLanIpv4Address(interfaceName: string, address: string): number {
     score -= 100;
   }
   if (address.endsWith(".1")) {
-    score -= 5;
+    score -= 50;
   }
   return score;
 }

@@ -153,6 +153,39 @@ describe("pairing routes", () => {
     ]);
   });
 
+  it("honors the management page preferred service URL when generating QR pairing payloads", async () => {
+    vi.spyOn(os, "hostname").mockReturnValue("windows-pc");
+    vi.spyOn(os, "networkInterfaces").mockReturnValue({
+      "本地连接* 9": [
+        {
+          address: "192.168.68.1",
+          family: "IPv4",
+          internal: false,
+          netmask: "255.255.255.0",
+          mac: "00:00:00:00:00:03",
+          cidr: "192.168.68.1/24"
+        }
+      ]
+    } as ReturnType<typeof os.networkInterfaces>);
+    const context = createTestAppContext({ host: "0.0.0.0" });
+    server = await createServer(context);
+
+    const ticket = await server.inject({
+      method: "POST",
+      url: "/api/pairing-ticket",
+      headers: { host: "127.0.0.1:37631" },
+      payload: { preferredServiceUrl: "https://192.168.2.31:37631" }
+    });
+    const ticketBody = ticket.json() as { qrPayload: string; serviceUrl: string; candidateServiceUrls: string[] };
+    const qrPayload = JSON.parse(ticketBody.qrPayload) as { serviceUrl: string; candidateServiceUrls: string[] };
+
+    expect(ticketBody.serviceUrl).toBe("https://192.168.2.31:37631");
+    expect(ticketBody.candidateServiceUrls[0]).toBe("https://192.168.2.31:37631");
+    expect(qrPayload.serviceUrl).toBe("https://192.168.2.31:37631");
+    expect(qrPayload.candidateServiceUrls[0]).toBe("https://192.168.2.31:37631");
+    expect(qrPayload.candidateServiceUrls).toContain("https://192.168.68.1:37631");
+  });
+
   it("uses the same stable desktop identity in health and QR pairing payloads", async () => {
     const context = createTestAppContext({ host: "0.0.0.0" });
     server = await createServer(context);

@@ -1007,7 +1007,11 @@ async function createPairingTicket() {
   const button = byId("create-pairing");
   if (button instanceof HTMLButtonElement) button.disabled = true;
   try {
-    const data = await fetchJson("/api/pairing-ticket", { method: "POST" });
+    const data = await fetchJson("/api/pairing-ticket", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ preferredServiceUrl: latestServiceUrl })
+    });
     const qr = byId("pairing-qr");
     const placeholder = byId("qr-placeholder");
     if (qr instanceof HTMLImageElement) {

@@ -52,6 +52,27 @@ describe("service url resolver", () => {
     ]);
   });
 
+  it("demotes Windows Wi-Fi Direct local area connection aliases", () => {
+    const input = {
+      bindHost: "0.0.0.0",
+      hostHeader: "127.0.0.1:37631",
+      hostname: "127.0.0.1",
+      port: 37631,
+      localHostname: "windows-pc",
+      networkInterfaces: {
+        "本地连接* 9": [{ address: "192.168.68.1", family: "IPv4", internal: false }],
+        WLAN: [{ address: "192.168.2.31", family: "IPv4", internal: false }]
+      }
+    };
+
+    expect(createServiceUrl(input)).toBe("https://192.168.2.31:37631");
+    expect(createServiceUrlCandidates(input)).toEqual([
+      "https://192.168.2.31:37631",
+      "https://windows-pc.local:37631",
+      "https://192.168.68.1:37631"
+    ]);
+  });
+
   it("includes stable local host and LAN candidates for IP changes", () => {
     const candidates = createServiceUrlCandidates({
       bindHost: "0.0.0.0",

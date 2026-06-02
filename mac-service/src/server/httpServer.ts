@@ -48,6 +48,9 @@ const PairingClaimBodySchema = z.object({
   pairingCode: z.string().min(1),
   deviceName: z.string().min(1)
 });
+const PairingTicketBodySchema = z.object({
+  preferredServiceUrl: z.string().trim().optional()
+});
 const PrepareAssetBodySchema = z.object({
   sessionId: z.string().min(1),
   fileName: z.string().min(1),
@@ -135,6 +138,75 @@ function isUnsupportedProjectRootPickerError(error: unknown): boolean {
 function sslVerificationHostname(hostHeader: string | string[] | undefined): string {
   const hostname = hostnameFromHostHeader(hostHeader);
   return hostname.length > 0 ? hostname : "localhost";
+}
+
+function isAdvertisableServiceUrl(value: string, expectedPort: number): boolean {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:") {
+      return false;
+    }
+    const hostname = parsed.hostname.toLowerCase();
+    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "0.0.0.0") {
+      return false;
+    }
+    const parsedPort = parsed.port.length > 0 ? Number(parsed.port) : 443;
+    return parsedPort === expectedPort;
+  } catch {
+    return false;
+  }
+}
+
+function serviceUrlPort(value: string, fallbackPort: number): number {
+  try {
+    const parsed = new URL(value);
+    if (parsed.port.length > 0) {
+      const port = Number(parsed.port);
+      return Number.isFinite(port) && port > 0 ? port : fallbackPort;
+    }
+    return parsed.protocol === "https:" ? 443 : fallbackPort;
+  } catch {
+    return fallbackPort;
+  }
+}
+
+function pushUniqueUrl(values: string[], value: string): void {
+  if (value.length === 0 || values.includes(value)) {
+    return;
+  }
+  values.push(value);
+}
+
+function prioritizeAdvertisedServiceUrls(preferredServiceUrl: string, fallbackServiceUrl: string, fallbackCandidates: string[], port: number) {
+  const serviceUrl = isAdvertisableServiceUrl(preferredServiceUrl, port) ? preferredServiceUrl : fallbackServiceUrl;
+  const candidateServiceUrls: string[] = [];
+  pushUniqueUrl(candidateServiceUrls, serviceUrl);
+  for (const candidate of fallbackCandidates) {
+    pushUniqueUrl(candidateServiceUrls, candidate);
+  }
+  return { serviceUrl, candidateServiceUrls };
+}
+
+function parseJsonRequestBody(body: unknown): unknown {
+  if (Buffer.isBuffer(body)) {
+    return parseJsonTextBody(body.toString("utf8"), body);
+  }
+  if (typeof body === "string") {
+    return parseJsonTextBody(body, body);
+  }
+  return body;
+}
+
+function parseJsonTextBody(text: string, fallback: unknown): unknown {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) {
+    return {};
+  }
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return fallback;
+  }
 }
 
 function listMediaAssetsForWeb(context: AppContext, query: string) {
@@ -490,21 +562,29 @@ export async function createServer(context: AppContext = createAppContext(), opt
 
   app.post("/api/pairing-ticket", async (request) => {
     const code = context.pairing.createPairingCode(context.localMacName);
-    const serviceUrl = createServiceUrl({
+    const body = PairingTicketBodySchema.safeParse(parseJsonRequestBody(request.body));
+    const preferredServiceUrl = body.success ? body.data.preferredServiceUrl ?? "" : "";
+    const fallbackServiceUrl = createServiceUrl({
       bindHost: context.config.host,
       hostHeader: request.headers.host,
       hostname: request.hostname,
       port: context.config.port
     });
-    const candidateServiceUrls = createServiceUrlCandidates({
+    const fallbackCandidateServiceUrls = createServiceUrlCandidates({
       bindHost: context.config.host,
       hostHeader: request.headers.host,
       hostname: request.hostname,
       port: context.config.port
     });
+    const advertised = prioritizeAdvertisedServiceUrls(
+      preferredServiceUrl,
+      fallbackServiceUrl,
+      fallbackCandidateServiceUrls,
+      serviceUrlPort(fallbackServiceUrl, context.config.port)
+    );
     const payload = createPairingPayload({
-      serviceUrl,
-      candidateServiceUrls,
+      serviceUrl: advertised.serviceUrl,
+      candidateServiceUrls: advertised.candidateServiceUrls,
       macId: context.localMacId,
       macName: code.macName,
       tlsFingerprint: context.transport.fingerprint,
@@ -517,8 +597,8 @@ export async function createServer(context: AppContext = createAppContext(), opt
       expiresAt: code.expiresAt,
       issuedAt: new Date().toISOString(),
       serverStartedAt: context.serviceStartedAt,
-      serviceUrl,
-      candidateServiceUrls,
+      serviceUrl: advertised.serviceUrl,
+      candidateServiceUrls: advertised.candidateServiceUrls,
       tlsFingerprint: context.transport.fingerprint,
       tlsPublicKeyHash: context.transport.publicKeyHash,
       qrPayload,
