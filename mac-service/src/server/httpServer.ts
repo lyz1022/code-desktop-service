@@ -178,10 +178,14 @@ function pushUniqueUrl(values: string[], value: string): void {
 }
 
 function prioritizeAdvertisedServiceUrls(preferredServiceUrl: string, fallbackServiceUrl: string, fallbackCandidates: string[], port: number) {
-  const serviceUrl = isAdvertisableServiceUrl(preferredServiceUrl, port) ? preferredServiceUrl : fallbackServiceUrl;
+  const hasPreferredServiceUrl = isAdvertisableServiceUrl(preferredServiceUrl, port);
+  const serviceUrl = hasPreferredServiceUrl ? preferredServiceUrl : fallbackServiceUrl;
   const candidateServiceUrls: string[] = [];
   pushUniqueUrl(candidateServiceUrls, serviceUrl);
   for (const candidate of fallbackCandidates) {
+    if (hasPreferredServiceUrl && candidate === fallbackServiceUrl && candidate !== serviceUrl) {
+      continue;
+    }
     pushUniqueUrl(candidateServiceUrls, candidate);
   }
   return { serviceUrl, candidateServiceUrls };

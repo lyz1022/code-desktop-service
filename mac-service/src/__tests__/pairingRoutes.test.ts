@@ -183,7 +183,7 @@ describe("pairing routes", () => {
     expect(ticketBody.candidateServiceUrls[0]).toBe("https://192.168.2.31:37631");
     expect(qrPayload.serviceUrl).toBe("https://192.168.2.31:37631");
     expect(qrPayload.candidateServiceUrls[0]).toBe("https://192.168.2.31:37631");
-    expect(qrPayload.candidateServiceUrls).toContain("https://192.168.68.1:37631");
+    expect(qrPayload.candidateServiceUrls).not.toContain("https://192.168.68.1:37631");
   });
 
   it("uses the same stable desktop identity in health and QR pairing payloads", async () => {
