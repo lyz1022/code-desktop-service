@@ -37,6 +37,12 @@ interface StartupStatusResponse {
   path?: string;
   message?: string;
 }
+type ProjectRootPickerPlatform = typeof process.platform;
+type ProjectRootPickerRunner = (
+  file: string,
+  args: string[],
+  options: { timeout: number; maxBuffer: number; windowsHide?: boolean }
+) => Promise<{ stdout: string | Buffer; stderr?: string | Buffer }>;
 
 const PairingClaimBodySchema = z.object({
   pairingCode: z.string().min(1),
@@ -62,6 +68,9 @@ const ClearMediaAssetsBodySchema = z.object({
   assetIds: z.array(z.string().min(1)).min(1)
 });
 const PROJECT_ROOT_PICKER_UNSUPPORTED_MESSAGE = "当前平台不支持系统目录选择器，请手动输入项目根目录路径。";
+const PROJECT_ROOT_PICKER_UNSUPPORTED_ERROR = "当前平台不支持系统目录选择器";
+const PROJECT_ROOT_PICKER_PROMPT = "选择用于移动端新建项目和创建新会话的项目根目录";
+const WINDOWS_PROJECT_ROOT_PICKER_CANCELLED = "__CODE_PROJECT_ROOT_PICKER_CANCELLED__";
 
 function isDeviceVisible(device: { expiresAt: string; revokedAt: string | null }): boolean {
   return device.revokedAt === null && Date.parse(device.expiresAt) > Date.now();
@@ -120,7 +129,7 @@ function isLocalManagementRequest(request: FastifyRequest): boolean {
 
 function isUnsupportedProjectRootPickerError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? "");
-  return message.includes("当前平台不支持访达目录选择器");
+  return message.includes(PROJECT_ROOT_PICKER_UNSUPPORTED_ERROR) || message.includes("当前平台不支持访达目录选择器");
 }
 
 function sslVerificationHostname(hostHeader: string | string[] | undefined): string {
@@ -181,7 +190,7 @@ function listMediaAssetsForWeb(context: AppContext, query: string) {
 }
 
 export async function createServer(context: AppContext = createAppContext(), options: CreateServerOptions = {}) {
-  const chooseProjectRoot = options.chooseProjectRoot ?? chooseProjectRootWithFinder;
+  const chooseProjectRoot = options.chooseProjectRoot ?? chooseProjectRootWithSystemPicker;
   const app = fastify({ logger: true, https: context.tls, bodyLimit: 105 * 1024 * 1024 });
 
   await app.register(websocket);
@@ -357,7 +366,7 @@ export async function createServer(context: AppContext = createAppContext(), opt
     try {
       selectedPath = await chooseProjectRoot();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "无法打开访达目录选择器";
+      const message = error instanceof Error ? error.message : "无法打开系统目录选择器";
       if (isUnsupportedProjectRootPickerError(error)) {
         context.audit.record({
           deviceId: null,
@@ -403,7 +412,7 @@ export async function createServer(context: AppContext = createAppContext(), opt
         sessionId: null,
         actionType: "projectRoots.add",
         result: "success",
-        detail: `已通过访达添加项目根目录 ${path.resolve(selectedPath)}`
+        detail: `已通过系统目录选择器添加项目根目录 ${path.resolve(selectedPath)}`
       });
       return { ok: true, cancelled: false, roots: withStaticRootFlags(context, roots) };
     } catch (error) {
@@ -927,20 +936,32 @@ function webProjectRoots(context: AppContext) {
   return withStaticRootFlags(context, context.projects.listRoots());
 }
 
-async function chooseProjectRootWithFinder(): Promise<string | null> {
-  if (process.platform !== "darwin") {
-    throw new Error("当前平台不支持访达目录选择器");
+export async function chooseProjectRootWithSystemPicker(options: {
+  platform?: ProjectRootPickerPlatform;
+  run?: ProjectRootPickerRunner;
+} = {}): Promise<string | null> {
+  const platform = options.platform ?? process.platform;
+  const run = options.run ?? execFileAsync;
+  if (platform === "darwin") {
+    return chooseProjectRootWithFinder(run);
   }
-  const script = 'POSIX path of (choose folder with prompt "选择用于移动端新建项目和创建新会话的项目根目录")';
+  if (platform === "win32") {
+    return chooseProjectRootWithWindowsFolderDialog(run);
+  }
+  throw new Error(PROJECT_ROOT_PICKER_UNSUPPORTED_ERROR);
+}
+
+async function chooseProjectRootWithFinder(run: ProjectRootPickerRunner): Promise<string | null> {
+  const script = `POSIX path of (choose folder with prompt "${PROJECT_ROOT_PICKER_PROMPT}")`;
   try {
-    const { stdout } = await execFileAsync("/usr/bin/osascript", ["-e", script], {
+    const { stdout } = await run("/usr/bin/osascript", ["-e", script], {
       timeout: 120_000,
       maxBuffer: 8 * 1024
     });
-    const selectedPath = stdout.trim();
+    const selectedPath = commandOutputText(stdout).trim();
     return selectedPath.length > 0 ? selectedPath : null;
   } catch (error) {
-    const message = finderErrorMessage(error);
+    const message = commandErrorMessage(error);
     if (message.includes("User canceled") || message.includes("-128")) {
       return null;
     }
@@ -948,7 +969,53 @@ async function chooseProjectRootWithFinder(): Promise<string | null> {
   }
 }
 
-function finderErrorMessage(error: unknown): string {
+async function chooseProjectRootWithWindowsFolderDialog(run: ProjectRootPickerRunner): Promise<string | null> {
+  const script = [
+    "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+    "$OutputEncoding = [System.Text.Encoding]::UTF8",
+    "Add-Type -AssemblyName System.Windows.Forms",
+    "[System.Windows.Forms.Application]::EnableVisualStyles()",
+    "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog",
+    `$dialog.Description = '${PROJECT_ROOT_PICKER_PROMPT}'`,
+    "$dialog.ShowNewFolderButton = $true",
+    "$result = $dialog.ShowDialog()",
+    "if ($result -eq [System.Windows.Forms.DialogResult]::OK -and -not [string]::IsNullOrWhiteSpace($dialog.SelectedPath)) {",
+    "  Write-Output $dialog.SelectedPath",
+    "} else {",
+    `  Write-Output '${WINDOWS_PROJECT_ROOT_PICKER_CANCELLED}'`,
+    "}"
+  ].join("\n");
+  try {
+    const { stdout } = await run("powershell.exe", [
+      "-NoProfile",
+      "-STA",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      script
+    ], {
+      timeout: 120_000,
+      maxBuffer: 16 * 1024,
+      windowsHide: false
+    });
+    const selectedPath = commandOutputText(stdout).trim();
+    if (selectedPath.length === 0 || selectedPath === WINDOWS_PROJECT_ROOT_PICKER_CANCELLED) {
+      return null;
+    }
+    return selectedPath;
+  } catch (error) {
+    const message = commandErrorMessage(error);
+    throw new Error(`无法打开 Windows 目录选择器：${message || "未知错误"}`);
+  }
+}
+
+function commandOutputText(value: string | Buffer | undefined): string {
+  if (typeof value === "string") return value;
+  if (Buffer.isBuffer(value)) return value.toString("utf8");
+  return "";
+}
+
+function commandErrorMessage(error: unknown): string {
   if (!error || typeof error !== "object") {
     return String(error ?? "");
   }

@@ -29,7 +29,7 @@ The service directory is still named `mac-service` for historical reasons. The c
 - Media asset storage for uploaded files, generated images, local file references, and downloadable session assets.
 - Local web preview/proxy session tracking and cleanup from the management page.
 - macOS LaunchAgent startup toggle from the management page.
-- Windows data-directory and Codex binary discovery support. Windows startup and capture automation are currently limited compared with macOS.
+- Windows data-directory, Codex binary discovery, project-root folder picker, and certificate trust installation support. Windows startup and capture automation are currently limited compared with macOS.
 
 ## Repository Layout
 
@@ -107,6 +107,8 @@ C:\Users\<you>\Documents\Codex\code-data\start-code-desktop-service.ps1
 ```
 
 This script does not silently install the local CA into the Windows Root store and does not register startup. Certificate trust is still installed from the loopback-only local management page, and Windows startup/capture automation remains unsupported in this phase.
+
+After the service is running on Windows, the management page's `Choose Folder` project-root action opens the Windows system folder picker. If the current desktop session cannot show a dialog, use the manual project-root path input as a fallback.
 
 Install dependencies:
 

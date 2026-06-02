@@ -29,7 +29,7 @@
 - 媒体资产存储：上传文件、生成图片、本机文件引用和会话资产下载。
 - 本地 Web 预览/代理会话的展示与清理。
 - macOS LaunchAgent 开机登录自启动开关。
-- Windows 已支持数据目录、Codex binary 探测和证书信任安装；部分服务管理能力仍以 macOS 为主。
+- Windows 已支持数据目录、Codex binary 探测、项目根目录系统选择器和证书信任安装；部分服务管理能力仍以 macOS 为主。
 
 ## 仓库结构
 
@@ -107,6 +107,8 @@ C:\Users\<you>\Documents\Codex\code-data\start-code-desktop-service.ps1
 ```
 
 该脚本不会静默写入 Windows Root store，也不会注册自启动。证书信任仍需从本机 loopback 管理页手动安装；Windows 自启动和屏幕截图自动化当前仍未支持。
+
+服务在 Windows 上启动后，管理页的“选择文件夹”项目根目录入口会打开 Windows 系统文件夹选择器。如果当前桌面会话无法弹出窗口，可以继续使用手动路径输入作为兜底。
 
 安装依赖：
 

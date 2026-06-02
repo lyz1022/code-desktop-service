@@ -603,7 +603,7 @@ async function chooseProjectRoot() {
   const button = byId("choose-project-root");
   const status = byId("project-root-status");
   if (button instanceof HTMLButtonElement) button.disabled = true;
-  if (status) status.textContent = "正在打开访达目录选择器...";
+  if (status) status.textContent = "正在打开系统目录选择器...";
   try {
     const result = await fetchJson("/api/project-roots/choose", { method: "POST" });
     renderProjectRoots(Array.isArray(result.roots) ? result.roots : []);

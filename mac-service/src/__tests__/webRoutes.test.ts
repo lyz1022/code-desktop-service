@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createTestAppContext } from "./helpers.js";
-import { createServer } from "../server/httpServer.js";
+import { chooseProjectRootWithSystemPicker, createServer } from "../server/httpServer.js";
 
 function saveSession(
   context: ReturnType<typeof createTestAppContext>,
@@ -128,6 +128,8 @@ describe("web management routes", () => {
     expect(response.body).not.toContain("Mac 管理页");
     expect(response.body).not.toContain("Mac 端认证");
     expect(response.body).not.toContain("Mac 服务保存的媒体副本");
+    expect(response.body).toContain("正在打开系统目录选择器");
+    expect(response.body).not.toContain("正在打开访达目录选择器");
   });
 
   it("adds and removes project roots from the web management API", async () => {
@@ -205,8 +207,8 @@ describe("web management routes", () => {
     }
   });
 
-  it("adds project roots through a Finder directory picker route", async () => {
-    const dynamicRoot = fs.mkdtempSync(path.join(os.tmpdir(), "code-finder-root-"));
+  it("adds project roots through a system directory picker route", async () => {
+    const dynamicRoot = fs.mkdtempSync(path.join(os.tmpdir(), "code-picker-root-"));
     server = await createServer(createTestAppContext(), {
       chooseProjectRoot: async () => dynamicRoot
     });
@@ -229,7 +231,7 @@ describe("web management routes", () => {
     });
   });
 
-  it("keeps project roots unchanged when the Finder directory picker is cancelled", async () => {
+  it("keeps project roots unchanged when the system directory picker is cancelled", async () => {
     server = await createServer(createTestAppContext(), {
       chooseProjectRoot: async () => null
     });
@@ -268,6 +270,35 @@ describe("web management routes", () => {
       message: "当前平台不支持系统目录选择器，请手动输入项目根目录路径。",
       roots: []
     });
+  });
+
+  it("uses a Windows PowerShell folder picker for project roots", async () => {
+    const calls: Array<{ file: string; args: string[]; timeout?: number; windowsHide?: boolean }> = [];
+    const selected = await chooseProjectRootWithSystemPicker({
+      platform: "win32",
+      run: async (file, args, options) => {
+        calls.push({ file, args, timeout: options.timeout, windowsHide: options.windowsHide });
+        return { stdout: "C:\\Users\\52960\\Documents\\Codex\r\n", stderr: "" };
+      }
+    });
+
+    expect(selected).toBe("C:\\Users\\52960\\Documents\\Codex");
+    expect(calls).toHaveLength(1);
+    expect(calls[0].file).toBe("powershell.exe");
+    expect(calls[0].args).toContain("-STA");
+    expect(calls[0].args).toContain("-ExecutionPolicy");
+    expect(calls[0].args.join("\n")).toContain("FolderBrowserDialog");
+    expect(calls[0].timeout).toBe(120_000);
+    expect(calls[0].windowsHide).toBe(false);
+  });
+
+  it("treats Windows folder picker cancellation as a cancelled project-root choice", async () => {
+    const selected = await chooseProjectRootWithSystemPicker({
+      platform: "win32",
+      run: async () => ({ stdout: "__CODE_PROJECT_ROOT_PICKER_CANCELLED__\r\n", stderr: "" })
+    });
+
+    expect(selected).toBeNull();
   });
 
   it("reads and toggles desktop service startup from the web management API", async () => {
