@@ -26,9 +26,13 @@ describe("Windows desktop service install script", () => {
     expect(script).toContain("$env:CODE_PORT");
     expect(script).toContain("$env:CODE_DATA_DIR");
     expect(script).toContain("$env:CODEX_BIN");
+    expect(script).toContain('[string]$ServiceHost = "0.0.0.0"');
+    expect(script).toContain("Get-LocalManagementHost");
     expect(script).toContain("node .\\mac-service\\dist\\main.js");
-    expect(script).toContain("curl.exe -k https://$ServiceHost`:$Port/api/health");
-    expect(script).toContain("curl.exe -k https://$ServiceHost`:$Port/api/codex-preflight");
+    expect(script).toContain("curl.exe -k https://$managementHost`:$Port/api/health");
+    expect(script).toContain("curl.exe -k https://$managementHost`:$Port/api/codex-preflight");
+    expect(script).toContain("allow Node.js on private networks");
+    expect(script).toContain("allow inbound TCP port $Port");
   });
 
   it("does not silently install certificate trust or register Windows startup", () => {

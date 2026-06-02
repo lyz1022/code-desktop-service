@@ -973,14 +973,11 @@ async function chooseProjectRootWithWindowsFolderDialog(run: ProjectRootPickerRu
   const script = [
     "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
     "$OutputEncoding = [System.Text.Encoding]::UTF8",
-    "Add-Type -AssemblyName System.Windows.Forms",
-    "[System.Windows.Forms.Application]::EnableVisualStyles()",
-    "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog",
-    `$dialog.Description = '${PROJECT_ROOT_PICKER_PROMPT}'`,
-    "$dialog.ShowNewFolderButton = $true",
-    "$result = $dialog.ShowDialog()",
-    "if ($result -eq [System.Windows.Forms.DialogResult]::OK -and -not [string]::IsNullOrWhiteSpace($dialog.SelectedPath)) {",
-    "  Write-Output $dialog.SelectedPath",
+    "$shell = New-Object -ComObject Shell.Application",
+    "$options = 0x00000051",
+    `$folder = $shell.BrowseForFolder(0, '${PROJECT_ROOT_PICKER_PROMPT}', $options, 0)`,
+    "if ($null -ne $folder -and $null -ne $folder.Self -and -not [string]::IsNullOrWhiteSpace($folder.Self.Path)) {",
+    "  Write-Output $folder.Self.Path",
     "} else {",
     `  Write-Output '${WINDOWS_PROJECT_ROOT_PICKER_CANCELLED}'`,
     "}"
@@ -991,8 +988,8 @@ async function chooseProjectRootWithWindowsFolderDialog(run: ProjectRootPickerRu
       "-STA",
       "-ExecutionPolicy",
       "Bypass",
-      "-Command",
-      script
+      "-EncodedCommand",
+      powershellEncodedCommand(script)
     ], {
       timeout: 120_000,
       maxBuffer: 16 * 1024,
@@ -1007,6 +1004,10 @@ async function chooseProjectRootWithWindowsFolderDialog(run: ProjectRootPickerRu
     const message = commandErrorMessage(error);
     throw new Error(`无法打开 Windows 目录选择器：${message || "未知错误"}`);
   }
+}
+
+function powershellEncodedCommand(script: string): string {
+  return Buffer.from(script, "utf16le").toString("base64");
 }
 
 function commandOutputText(value: string | Buffer | undefined): string {

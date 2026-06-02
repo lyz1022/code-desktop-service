@@ -1,7 +1,7 @@
 param(
   [string]$CodexBin = "",
   [string]$DataDir = "",
-  [string]$ServiceHost = "127.0.0.1",
+  [string]$ServiceHost = "0.0.0.0",
   [int]$Port = 37631,
   [switch]$AllowUnsupportedNode,
   [switch]$SkipInstall,
@@ -121,6 +121,14 @@ function ConvertTo-SingleQuotedPowerShellString {
   return "'" + $Value.Replace("'", "''") + "'"
 }
 
+function Get-LocalManagementHost {
+  param([string]$HostValue)
+  if ([string]::IsNullOrWhiteSpace($HostValue) -or $HostValue -eq "0.0.0.0" -or $HostValue -eq "::") {
+    return "localhost"
+  }
+  return $HostValue
+}
+
 if ($env:OS -ne "Windows_NT") {
   Fail "This installer is intended for Windows PowerShell."
 }
@@ -202,6 +210,7 @@ $startScriptPath = Join-Path $DataDir "start-code-desktop-service.ps1"
 $quotedRepoRoot = ConvertTo-SingleQuotedPowerShellString $repoRoot
 $quotedDataDir = ConvertTo-SingleQuotedPowerShellString $DataDir
 $quotedCodexBin = ConvertTo-SingleQuotedPowerShellString $resolvedCodexBin
+$managementHost = Get-LocalManagementHost $ServiceHost
 $startScript = @"
 `$ErrorActionPreference = "Stop"
 `$env:CODE_HOST = "$ServiceHost"
@@ -219,11 +228,15 @@ Write-Host "Run the desktop service:"
 Write-Host "  powershell -ExecutionPolicy Bypass -File `"$startScriptPath`""
 Write-Host ""
 Write-Host "Management page:"
-Write-Host "  https://$ServiceHost`:$Port/"
+Write-Host "  https://$managementHost`:$Port/"
 Write-Host ""
 Write-Host "Health checks:"
-Write-Host "  curl.exe -k https://$ServiceHost`:$Port/api/health"
-Write-Host "  curl.exe -k https://$ServiceHost`:$Port/api/codex-preflight"
+Write-Host "  curl.exe -k https://$managementHost`:$Port/api/health"
+Write-Host "  curl.exe -k https://$managementHost`:$Port/api/codex-preflight"
+Write-Host ""
+Write-Host "Mobile pairing:"
+Write-Host "  The generated start script listens on $ServiceHost by default so paired mobile devices can connect through this PC's LAN address."
+Write-Host "  If Windows Defender Firewall prompts, allow Node.js on private networks. If pairing still times out, allow inbound TCP port $Port."
 Write-Host ""
 Write-Host "Project roots:"
 Write-Host "  Open the management page and use Choose Folder to add a writable project root."

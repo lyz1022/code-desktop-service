@@ -52,6 +52,8 @@ C:\Users\<you>\Documents\Codex\code-data
 C:\Users\<you>\Documents\Codex\code-data\start-code-desktop-service.ps1
 ```
 
+生成的启动脚本默认监听 `0.0.0.0`，用于让鸿蒙设备通过 Windows 电脑的局域网地址连接。请在 Windows 电脑本机通过 `https://localhost:37631` 打开管理页；如果配对请求超时，请检查 Windows Defender 防火墙，允许 Node.js 使用专用网络，或放行入站 TCP 端口 `37631`。
+
 脚本不会静默写入 Windows Root store，也不会注册自启动。证书信任仍需在本机浏览器打开 `https://localhost:37631` 后，从管理页手动安装；Windows 自启动和屏幕截图自动化当前仍属于未支持能力。
 
 服务启动后，Windows 管理页里的“选择文件夹”会打开系统文件夹选择器，用于添加项目根目录；如果当前桌面会话无法弹出窗口，也可以使用手动输入路径作为兜底。

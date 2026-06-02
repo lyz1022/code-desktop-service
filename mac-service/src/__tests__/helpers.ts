@@ -4,11 +4,11 @@ import path from "node:path";
 import type { ServiceConfig } from "../config.js";
 import { createAppContext } from "../appContext.js";
 
-export function createTestAppContext(overrides: Partial<Pick<ServiceConfig, "projectRoots" | "launchAgentDir" | "startupCommand">> = {}) {
+export function createTestAppContext(overrides: Partial<Pick<ServiceConfig, "host" | "port" | "projectRoots" | "launchAgentDir" | "startupCommand">> = {}) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "code-mac-service-test-"));
   return createAppContext({
-    host: "127.0.0.1",
-    port: 0,
+    host: overrides.host ?? "127.0.0.1",
+    port: overrides.port ?? 0,
     dataDir,
     codexBin: undefined,
     codexIpcSocketPath: path.join(dataDir, "missing-codex-ipc.sock"),

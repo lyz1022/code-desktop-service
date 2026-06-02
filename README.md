@@ -106,6 +106,8 @@ The default Windows data directory is `C:\Users\<you>\Documents\Codex\code-data`
 C:\Users\<you>\Documents\Codex\code-data\start-code-desktop-service.ps1
 ```
 
+The generated start script binds the service to `0.0.0.0` by default so paired mobile devices can connect through the Windows PC's LAN address. Open the management page from the Windows PC through `https://localhost:37631`. If pairing times out from the mobile device, allow Node.js on private networks in Windows Defender Firewall or allow inbound TCP port `37631`.
+
 This script does not silently install the local CA into the Windows Root store and does not register startup. Certificate trust is still installed from the loopback-only local management page, and Windows startup/capture automation remains unsupported in this phase.
 
 After the service is running on Windows, the management page's `Choose Folder` project-root action opens the Windows system folder picker. If the current desktop session cannot show a dialog, use the manual project-root path input as a fallback.

@@ -51,4 +51,34 @@ describe("service url resolver", () => {
       "https://192.168.43.6:37631"
     ]);
   });
+
+  it("does not advertise unreachable LAN candidates for a loopback-only service", () => {
+    const candidates = createServiceUrlCandidates({
+      bindHost: "127.0.0.1",
+      hostHeader: "127.0.0.1:37631",
+      hostname: "127.0.0.1",
+      port: 37631,
+      localHostname: "windows-pc",
+      networkInterfaces: {
+        lo0: [{ address: "127.0.0.1", family: "IPv4", internal: true }],
+        ethernet: [{ address: "192.168.2.31", family: "IPv4", internal: false }]
+      }
+    });
+
+    expect(candidates).toEqual(["https://127.0.0.1:37631"]);
+  });
+
+  it("uses a specific reachable bind host when no reachable request host is available", () => {
+    const serviceUrl = createServiceUrl({
+      bindHost: "192.168.2.31",
+      hostHeader: undefined,
+      hostname: "localhost",
+      port: 37631,
+      networkInterfaces: {
+        ethernet: [{ address: "192.168.2.31", family: "IPv4", internal: false }]
+      }
+    });
+
+    expect(serviceUrl).toBe("https://192.168.2.31:37631");
+  });
 });

@@ -84,7 +84,7 @@ describe("pairing routes", () => {
   });
 
   it("includes the service port and reconnect candidates in QR pairing payloads", async () => {
-    const context = createTestAppContext();
+    const context = createTestAppContext({ host: "0.0.0.0" });
     server = await createServer(context);
 
     const ticket = await server.inject({ method: "POST", url: "/api/pairing-ticket", headers: { host: "127.0.0.1:37631" } });
@@ -101,14 +101,27 @@ describe("pairing routes", () => {
       tlsPublicKeyHash: string;
     };
 
-    expect(ticketBody.serviceUrl).toBe("https://127.0.0.1:37631");
+    expect(ticketBody.serviceUrl).toMatch(/^https:\/\/.+:37631$/);
     expect(ticketBody.issuedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(ticketBody.serverStartedAt).toBe(context.serviceStartedAt);
     expect(ticketBody.tlsPublicKeyHash).toBe(context.transport.publicKeyHash);
-    expect(qrPayload.serviceUrl).toBe("https://127.0.0.1:37631");
+    expect(qrPayload.serviceUrl).toBe(ticketBody.serviceUrl);
     expect(qrPayload.tlsPublicKeyHash).toBe(context.transport.publicKeyHash);
-    expect(qrPayload.candidateServiceUrls).toContain("https://127.0.0.1:37631");
+    expect(qrPayload.candidateServiceUrls).toContain(ticketBody.serviceUrl);
     expect(qrPayload.candidateServiceUrls.some((url) => url.endsWith(".local:37631"))).toBe(true);
+  });
+
+  it("does not advertise LAN reconnect candidates when the service is loopback-only", async () => {
+    const context = createTestAppContext({ host: "127.0.0.1" });
+    server = await createServer(context);
+
+    const ticket = await server.inject({ method: "POST", url: "/api/pairing-ticket", headers: { host: "127.0.0.1:37631" } });
+    const ticketBody = ticket.json() as { qrPayload: string; serviceUrl: string };
+    const qrPayload = JSON.parse(ticketBody.qrPayload) as { serviceUrl: string; candidateServiceUrls: string[] };
+
+    expect(ticketBody.serviceUrl).toBe("https://127.0.0.1:37631");
+    expect(qrPayload.serviceUrl).toBe("https://127.0.0.1:37631");
+    expect(qrPayload.candidateServiceUrls).toEqual(["https://127.0.0.1:37631"]);
   });
 
   it("records failed pairing claims for diagnosis without authorizing a device", async () => {

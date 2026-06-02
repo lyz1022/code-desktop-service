@@ -287,7 +287,12 @@ describe("web management routes", () => {
     expect(calls[0].file).toBe("powershell.exe");
     expect(calls[0].args).toContain("-STA");
     expect(calls[0].args).toContain("-ExecutionPolicy");
-    expect(calls[0].args.join("\n")).toContain("FolderBrowserDialog");
+    expect(calls[0].args).toContain("-EncodedCommand");
+    const encodedIndex = calls[0].args.indexOf("-EncodedCommand") + 1;
+    const decodedScript = Buffer.from(calls[0].args[encodedIndex], "base64").toString("utf16le");
+    expect(decodedScript).toContain("Shell.Application");
+    expect(decodedScript).toContain("BrowseForFolder");
+    expect(decodedScript).not.toContain("FolderBrowserDialog");
     expect(calls[0].timeout).toBe(120_000);
     expect(calls[0].windowsHide).toBe(false);
   });

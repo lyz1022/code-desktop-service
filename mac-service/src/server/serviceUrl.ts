@@ -57,6 +57,10 @@ function isReachableRequestHost(host: string): boolean {
   return !isLoopbackHost(host) && !isAllInterfaceHost(host);
 }
 
+function isReachableBindHost(host: string): boolean {
+  return !isLoopbackHost(host) && !isAllInterfaceHost(host);
+}
+
 function isIpv4Entry(entry: NetworkInterfaceEntry): boolean {
   return entry.family === "IPv4" || entry.family === 4;
 }
@@ -113,10 +117,14 @@ export function createServiceUrl(input: CreateServiceUrlInput): string {
   const port = extractPort(input.hostHeader, input.port);
   let host = requestHost;
 
-  if (isAllInterfaceHost(input.bindHost) && !isReachableRequestHost(requestHost)) {
-    const lanAddress = findLanIpv4Address(input.networkInterfaces ?? os.networkInterfaces());
-    if (lanAddress.length > 0) {
-      host = lanAddress;
+  if (!isReachableRequestHost(requestHost)) {
+    if (isAllInterfaceHost(input.bindHost)) {
+      const lanAddress = findLanIpv4Address(input.networkInterfaces ?? os.networkInterfaces());
+      if (lanAddress.length > 0) {
+        host = lanAddress;
+      }
+    } else if (isReachableBindHost(input.bindHost)) {
+      host = input.bindHost;
     }
   }
 
@@ -132,7 +140,7 @@ export function createServiceUrlCandidates(input: CreateServiceUrlInput): string
   pushUnique(result, createServiceUrl({ ...input, networkInterfaces }));
 
   const localHostname = normalizedLocalHostname(input.localHostname ?? os.hostname());
-  if (localHostname.length > 0) {
+  if (!isLoopbackHost(input.bindHost) && localHostname.length > 0) {
     pushUnique(result, formatServiceUrl(localHostname, port));
   }
 
@@ -140,9 +148,11 @@ export function createServiceUrlCandidates(input: CreateServiceUrlInput): string
     pushUnique(result, formatServiceUrl(requestHost, port));
   }
 
-  const lanAddresses = findLanIpv4Addresses(networkInterfaces);
-  for (const address of lanAddresses) {
-    pushUnique(result, formatServiceUrl(address, port));
+  if (isAllInterfaceHost(input.bindHost)) {
+    const lanAddresses = findLanIpv4Addresses(networkInterfaces);
+    for (const address of lanAddresses) {
+      pushUnique(result, formatServiceUrl(address, port));
+    }
   }
 
   return result;

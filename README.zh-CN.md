@@ -106,6 +106,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install-windows-desktop-servi
 C:\Users\<you>\Documents\Codex\code-data\start-code-desktop-service.ps1
 ```
 
+生成的启动脚本默认将服务监听到 `0.0.0.0`，这样已配对移动端才能通过 Windows 电脑的局域网地址连接。请在 Windows 电脑本机通过 `https://localhost:37631` 打开管理页；如果移动端配对超时，请在 Windows Defender 防火墙中允许 Node.js 使用专用网络，或放行入站 TCP 端口 `37631`。
+
 该脚本不会静默写入 Windows Root store，也不会注册自启动。证书信任仍需从本机 loopback 管理页手动安装；Windows 自启动和屏幕截图自动化当前仍未支持。
 
 服务在 Windows 上启动后，管理页的“选择文件夹”项目根目录入口会打开 Windows 系统文件夹选择器。如果当前桌面会话无法弹出窗口，可以继续使用手动路径输入作为兜底。
