@@ -231,7 +231,7 @@ export async function createServer(context: AppContext = createAppContext(), opt
       startedAt: context.serviceStartedAt,
       uptimeSeconds: serviceUptimeSeconds(context.serviceStartedAt),
       serviceUrl,
-      macId: "local-mac",
+      macId: context.localMacId,
       candidateServiceUrls: createServiceUrlCandidates({
         bindHost: context.config.host,
         hostHeader: request.headers.host,
@@ -505,7 +505,7 @@ export async function createServer(context: AppContext = createAppContext(), opt
     const payload = createPairingPayload({
       serviceUrl,
       candidateServiceUrls,
-      macId: "local-mac",
+      macId: context.localMacId,
       macName: code.macName,
       tlsFingerprint: context.transport.fingerprint,
       tlsPublicKeyHash: context.transport.publicKeyHash,

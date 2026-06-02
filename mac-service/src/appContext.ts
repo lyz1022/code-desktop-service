@@ -24,6 +24,7 @@ import { createSessionInputQueueService } from "./domain/sessionInputQueueServic
 import { createSessionService } from "./domain/sessionService.js";
 import { createPairingService } from "./security/pairing.js";
 import { createCertificateTrustService } from "./security/certificateTrust.js";
+import { loadOrCreateDesktopIdentity } from "./security/desktopIdentity.js";
 import {
   collectDefaultTransportSubjectAltNames,
   ensureTransportCertificate,
@@ -79,6 +80,7 @@ export function createAppContext(config: ServiceConfig = loadConfig(), options: 
     codexBin: config.codexBin,
     codexCandidates
   };
+  const desktopIdentity = loadOrCreateDesktopIdentity(config.dataDir);
   let transport = ensureTransportCertificate(config.dataDir, collectTransportSubjectAltNames());
   let tls = readTransportTlsFiles(transport);
   const db = openDatabase("code-v1.sqlite", config);
@@ -102,6 +104,7 @@ export function createAppContext(config: ServiceConfig = loadConfig(), options: 
   const context = {
     config,
     serviceStartedAt: new Date().toISOString(),
+    localMacId: desktopIdentity.id,
     localMacName: platform.resolveDisplayName(),
     transport,
     certificateTrust: createCertificateTrustService(),

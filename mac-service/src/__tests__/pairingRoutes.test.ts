@@ -111,6 +111,20 @@ describe("pairing routes", () => {
     expect(qrPayload.candidateServiceUrls.some((url) => url.endsWith(".local:37631"))).toBe(true);
   });
 
+  it("uses the same stable desktop identity in health and QR pairing payloads", async () => {
+    const context = createTestAppContext({ host: "0.0.0.0" });
+    server = await createServer(context);
+
+    const health = await server.inject({ method: "GET", url: "/api/health", headers: { host: "127.0.0.1:37631" } });
+    const healthBody = health.json() as { macId: string };
+    const ticket = await server.inject({ method: "POST", url: "/api/pairing-ticket", headers: { host: "127.0.0.1:37631" } });
+    const ticketBody = ticket.json() as { qrPayload: string };
+    const qrPayload = JSON.parse(ticketBody.qrPayload) as { macId: string };
+
+    expect(healthBody.macId).toMatch(/^desktop-[A-Za-z0-9_-]{12,}$/);
+    expect(qrPayload.macId).toBe(healthBody.macId);
+  });
+
   it("does not advertise LAN reconnect candidates when the service is loopback-only", async () => {
     const context = createTestAppContext({ host: "127.0.0.1" });
     server = await createServer(context);

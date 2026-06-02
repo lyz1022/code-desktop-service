@@ -151,4 +151,49 @@ describe("desktop platform", () => {
       context.db.close();
     }
   });
+
+  it("keeps one stable desktop id per service data directory", () => {
+    const firstDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "code-desktop-id-a-"));
+    const secondDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "code-desktop-id-b-"));
+    const firstContext = createAppContext({
+      host: "127.0.0.1",
+      port: 0,
+      dataDir: firstDataDir,
+      codexBin: undefined,
+      codexIpcSocketPath: path.join(firstDataDir, "missing-codex-ipc.sock"),
+      projectRoots: [],
+      launchAgentDir: path.join(firstDataDir, "LaunchAgents"),
+      startupCommand: "pnpm dev"
+    });
+    const restartedFirstContext = createAppContext({
+      host: "127.0.0.1",
+      port: 0,
+      dataDir: firstDataDir,
+      codexBin: undefined,
+      codexIpcSocketPath: path.join(firstDataDir, "missing-codex-ipc.sock"),
+      projectRoots: [],
+      launchAgentDir: path.join(firstDataDir, "LaunchAgents"),
+      startupCommand: "pnpm dev"
+    });
+    const secondContext = createAppContext({
+      host: "127.0.0.1",
+      port: 0,
+      dataDir: secondDataDir,
+      codexBin: undefined,
+      codexIpcSocketPath: path.join(secondDataDir, "missing-codex-ipc.sock"),
+      projectRoots: [],
+      launchAgentDir: path.join(secondDataDir, "LaunchAgents"),
+      startupCommand: "pnpm dev"
+    });
+
+    try {
+      expect(firstContext.localMacId).toMatch(/^desktop-[A-Za-z0-9_-]{12,}$/);
+      expect(restartedFirstContext.localMacId).toBe(firstContext.localMacId);
+      expect(secondContext.localMacId).not.toBe(firstContext.localMacId);
+    } finally {
+      firstContext.db.close();
+      restartedFirstContext.db.close();
+      secondContext.db.close();
+    }
+  });
 });

@@ -24,7 +24,7 @@ function currentBonjourInput() {
   return {
     name: context.localMacName,
     port: boundPort(),
-    macId: "local-mac",
+    macId: context.localMacId,
     tlsFingerprint: context.transport.fingerprint,
     tlsPublicKeyHash: context.transport.publicKeyHash,
     serviceUrl: candidateServiceUrls[0] ?? "",

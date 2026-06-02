@@ -42,7 +42,7 @@ describe("http server", () => {
       processId: process.pid,
       host: expect.any(String),
       serviceUrl: expect.stringMatching(/^https:\/\//),
-      macId: "local-mac",
+      macId: context.localMacId,
       candidateServiceUrls: expect.arrayContaining([expect.stringMatching(/^https:\/\//)]),
       startedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
       uptimeSeconds: expect.any(Number),
