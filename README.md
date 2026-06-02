@@ -52,7 +52,8 @@ Not included in this repository:
 
 ## Requirements
 
-- Node.js 20 LTS or 22 LTS is recommended on Windows.
+- Node.js 20 LTS or 22 LTS is recommended on Windows. For a fresh Windows install, prefer Node.js 22:
+  `winget install -e --id OpenJS.NodeJS.22`.
 - Node.js 24 may require Visual Studio C++ Build Tools because `better-sqlite3` can fall back to a native rebuild.
 - pnpm 9.15.4, as declared by `packageManager`.
 - A local Codex desktop/App Server installation or a reachable Codex CLI binary.
@@ -82,7 +83,13 @@ cd code-desktop-service
 
 ### Windows Quick Setup
 
-On Windows, run the lightweight PowerShell setup script from the repository root. It checks Node.js, prepares pnpm through Corepack when needed, validates the Codex CLI/App Server binary, installs dependencies, builds `@code/mac-service`, and writes a local start script under the data directory.
+On Windows, run the lightweight PowerShell setup script from the repository root. It checks Node.js, rejects inaccessible WindowsApps `node.exe` aliases, prepares pnpm through Corepack when needed, validates the Codex CLI/App Server binary, installs dependencies, builds `@code/mac-service`, and writes a local start script under the data directory.
+
+For a clean Windows machine, install Node.js 22 first:
+
+```powershell
+winget install -e --id OpenJS.NodeJS.22
+```
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\install-windows-desktop-service.ps1
@@ -106,6 +113,8 @@ The default Windows data directory is `C:\Users\<you>\Documents\Codex\code-data`
 C:\Users\<you>\Documents\Codex\code-data\start-code-desktop-service.ps1
 ```
 
+The generated start script uses the absolute `node.exe` path validated during setup, not a bare `node` command. This avoids later failures when `PATH` resolves `node.exe` to a WindowsApps alias such as `C:\Program Files\WindowsApps\OpenAI.Codex_...\node.exe`.
+
 The generated start script binds the service to `0.0.0.0` by default so paired mobile devices can connect through the Windows PC's LAN address. Open the management page from the Windows PC through `https://localhost:37631`. If pairing times out from the mobile device, allow Node.js on private networks in Windows Defender Firewall or allow inbound TCP port `37631`.
 
 This script does not silently install the local CA into the Windows Root store and does not register startup. Certificate trust is still installed from the loopback-only local management page, and Windows startup/capture automation remains unsupported in this phase.
@@ -113,6 +122,14 @@ This script does not silently install the local CA into the Windows Root store a
 After the service is running on Windows, the management page's `Choose Folder` project-root action opens the Windows system folder picker. If the current desktop session cannot show a dialog, use the manual project-root path input as a fallback.
 
 When a paired mobile client creates a project under a Windows project root, the service validates the project name before folder creation. Names containing Windows reserved characters (`< > " | ? *`), ending with `.`, or using reserved device names such as `CON`, `PRN`, `AUX`, `NUL`, `CONIN$`, `CONOUT$`, `COM1`-`COM9`, or `LPT1`-`LPT9` are rejected, including reserved names with extensions like `con.txt`.
+
+#### Windows Troubleshooting
+
+- `Access is denied` from `node.exe`: Windows is probably resolving `node` to a WindowsApps alias. Install Node.js 22 with `winget install -e --id OpenJS.NodeJS.22`, open a new PowerShell window, and rerun the setup script. The setup script now fails early when it detects this alias.
+- Node.js 24 is rejected: use Node.js 20 LTS or 22 LTS, or rerun with `-AllowUnsupportedNode` only if you have the native build toolchain needed by `better-sqlite3`.
+- `pnpm` or `corepack` is missing: install Node.js 22, open a new PowerShell window, then run `corepack enable` and `corepack prepare pnpm@9.15.4 --activate`.
+- Certificate warnings in the browser: open the management page from `https://localhost:37631` on the Windows PC and use the local trust action there. The setup script does not silently modify the Windows Root store.
+- Mobile pairing times out: make sure the generated start script is running, allow Node.js on private networks in Windows Defender Firewall, and allow inbound TCP port `37631` if needed.
 
 Install dependencies:
 

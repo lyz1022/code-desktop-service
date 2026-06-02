@@ -40,6 +40,37 @@ function Test-WindowsAppsPath {
   return $PathValue -match "\\WindowsApps\\"
 }
 
+function Get-NodeInstallHint {
+  return "Install Node.js 22 LTS with: winget install -e --id OpenJS.NodeJS.22"
+}
+
+function Test-NodeCandidate {
+  param([string]$PathValue)
+  if ([string]::IsNullOrWhiteSpace($PathValue)) {
+    return $false
+  }
+  if (Test-WindowsAppsPath $PathValue) {
+    Write-Warning "Skipping WindowsApps Node.js candidate: $PathValue"
+    return $false
+  }
+  if (-not (Test-Path -LiteralPath $PathValue)) {
+    return $false
+  }
+  try {
+    $versionOutput = & $PathValue --version 2>&1
+    if ($LASTEXITCODE -ne 0) {
+      Write-Warning "Skipping Node.js candidate that cannot run --version: $PathValue"
+      Write-Warning (($versionOutput | Out-String).Trim())
+      return $false
+    }
+    return $true
+  } catch {
+    Write-Warning "Skipping Node.js candidate that failed validation: $PathValue"
+    Write-Warning $_.Exception.Message
+    return $false
+  }
+}
+
 function Test-CodexCandidate {
   param([string]$PathValue)
   if ([string]::IsNullOrWhiteSpace($PathValue)) {
@@ -155,21 +186,27 @@ try {
 Write-Step "Checking Node.js"
 $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
 if ($null -eq $nodeCommand) {
-  Fail "Node.js was not found. Install Node.js 20 LTS or 22 LTS first. Example: winget install OpenJS.NodeJS.LTS"
+  Fail "Node.js was not found. $(Get-NodeInstallHint)"
 }
-$nodeVersion = (& node --version).Trim()
+$resolvedNodePath = $nodeCommand.Source
+if (-not (Test-NodeCandidate $resolvedNodePath)) {
+  Fail "The node.exe found on PATH is not usable: $resolvedNodePath. It may be a WindowsApps alias or blocked executable. $(Get-NodeInstallHint) Then make sure the Node.js install directory appears before WindowsApps on PATH."
+}
+$nodeVersion = (& $resolvedNodePath --version).Trim()
 if ($nodeVersion -notmatch "^v?(\d+)\.") {
   Fail "Could not parse Node.js version: $nodeVersion"
 }
 $nodeMajor = [int]$Matches[1]
 if ($nodeMajor -ne 20 -and $nodeMajor -ne 22) {
-  $message = "Node.js $nodeVersion is not the recommended Windows version. Use Node.js 20 LTS or 22 LTS. Node 24 may require Visual Studio C++ Build Tools for better-sqlite3."
+  $message = "Node.js $nodeVersion is not the recommended Windows version. Use Node.js 20 LTS or 22 LTS. Node 24 may require Visual Studio C++ Build Tools for better-sqlite3. $(Get-NodeInstallHint)"
   if (-not $AllowUnsupportedNode) {
     Fail "$message Re-run with -AllowUnsupportedNode to continue anyway."
   }
   Write-Warning $message
 }
 Write-Host "Node.js: $nodeVersion"
+Write-Host "Node path: $resolvedNodePath"
+$env:PATH = (Split-Path -Parent $resolvedNodePath) + [System.IO.Path]::PathSeparator + $env:PATH
 
 Write-Step "Preparing pnpm"
 $pnpmCommand = Get-Command pnpm -ErrorAction SilentlyContinue
@@ -210,6 +247,7 @@ $startScriptPath = Join-Path $DataDir "start-code-desktop-service.ps1"
 $quotedRepoRoot = ConvertTo-SingleQuotedPowerShellString $repoRoot
 $quotedDataDir = ConvertTo-SingleQuotedPowerShellString $DataDir
 $quotedCodexBin = ConvertTo-SingleQuotedPowerShellString $resolvedCodexBin
+$quotedNodePath = ConvertTo-SingleQuotedPowerShellString $resolvedNodePath
 $managementHost = Get-LocalManagementHost $ServiceHost
 $startScript = @"
 `$ErrorActionPreference = "Stop"
@@ -218,7 +256,7 @@ $startScript = @"
 `$env:CODE_DATA_DIR = $quotedDataDir
 `$env:CODEX_BIN = $quotedCodexBin
 Set-Location $quotedRepoRoot
-node .\mac-service\dist\main.js
+& $quotedNodePath .\mac-service\dist\main.js
 "@
 Set-Content -LiteralPath $startScriptPath -Value $startScript -Encoding UTF8
 Write-Host "Start script: $startScriptPath"

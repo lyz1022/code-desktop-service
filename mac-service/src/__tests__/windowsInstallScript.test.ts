@@ -13,6 +13,8 @@ describe("Windows desktop service install script", () => {
     expect(script).toContain("param(");
     expect(script).toContain("$env:OS -ne \"Windows_NT\"");
     expect(script).toContain("Node.js 20 LTS or 22 LTS");
+    expect(script).toContain("winget install -e --id OpenJS.NodeJS.22");
+    expect(script).toContain("Test-NodeCandidate");
     expect(script).toContain('Invoke-Checked "corepack" @("prepare", "pnpm@9.15.4", "--activate")');
     expect(script).toContain('Invoke-Checked "pnpm" @("install", "--frozen-lockfile")');
     expect(script).toContain('Invoke-Checked "pnpm" @("--filter", "@code/mac-service", "build")');
@@ -28,7 +30,8 @@ describe("Windows desktop service install script", () => {
     expect(script).toContain("$env:CODEX_BIN");
     expect(script).toContain('[string]$ServiceHost = "0.0.0.0"');
     expect(script).toContain("Get-LocalManagementHost");
-    expect(script).toContain("node .\\mac-service\\dist\\main.js");
+    expect(script).toContain("$quotedNodePath = ConvertTo-SingleQuotedPowerShellString $resolvedNodePath");
+    expect(script).toContain("& $quotedNodePath .\\mac-service\\dist\\main.js");
     expect(script).toContain("curl.exe -k https://$managementHost`:$Port/api/health");
     expect(script).toContain("curl.exe -k https://$managementHost`:$Port/api/codex-preflight");
     expect(script).toContain("allow Node.js on private networks");
