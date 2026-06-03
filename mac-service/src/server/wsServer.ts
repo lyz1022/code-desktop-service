@@ -76,7 +76,16 @@ export const ClientCommandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("session.sync.disable"), requestId: z.string(), sessionId: z.string() }),
   z.object({ type: z.literal("session.sync.unsubscribe"), requestId: z.string(), sessionId: z.string() }),
   z.object({ type: z.literal("session.rename"), requestId: z.string(), sessionId: z.string(), title: z.string().trim().min(1).max(120) }),
-  z.object({ type: z.literal("session.sendText"), requestId: z.string(), sessionId: z.string(), clientMessageId: z.string().min(1), text: z.string().min(1), guidance: SessionInputGuidanceSchema.optional(), attachmentIds: z.array(z.string().min(1)).optional() }),
+  z.object({
+    type: z.literal("session.sendText"),
+    requestId: z.string(),
+    sessionId: z.string(),
+    clientMessageId: z.string().min(1),
+    text: z.string().min(1),
+    guidance: SessionInputGuidanceSchema.optional(),
+    attachmentIds: z.array(z.string().min(1)).optional(),
+    skipPreflightResume: z.boolean().optional()
+  }),
   z.object({ type: z.literal("session.steer"), requestId: z.string(), sessionId: z.string(), clientMessageId: z.string().min(1), text: z.string().min(1), guidance: SessionInputGuidanceSchema.optional() }),
   z.object({ type: z.literal("session.context.compact"), requestId: z.string(), sessionId: z.string().min(1) }),
   z.object({ type: z.literal("session.inputQueue.enqueue"), requestId: z.string(), sessionId: z.string(), clientMessageId: z.string().min(1), text: z.string().min(1), guidance: SessionInputGuidanceSchema }).strict(),
@@ -1105,7 +1114,11 @@ export function createCommandRouter(deps: {
             await steerActiveTurnWithExpectedRetry({ sessionId: command.sessionId, turnId: turnId!, inputItems: attachmentInput.inputItems, clientUserMessageId: command.clientMessageId });
             return;
           }
-          const started = await startSessionTurn(command.sessionId, { inputItems: attachmentInput.inputItems, clientUserMessageId: command.clientMessageId });
+          const started = await startSessionTurn(
+            command.sessionId,
+            { inputItems: attachmentInput.inputItems, clientUserMessageId: command.clientMessageId },
+            command.skipPreflightResume === true
+          );
           if (started !== null) {
             onBackgroundTurnStarted?.(started);
           }
@@ -2186,6 +2199,12 @@ async function handleClientMessage(
       throw new Error("会话尚未开启同步");
     }
 
+    const sendTextSessionWasSynced = parsed.data.type === "session.sendText" &&
+      subscriber.syncedSessionIds.has(parsed.data.sessionId);
+    const commandForRouter: ClientCommand = parsed.data.type === "session.sendText" && sendTextSessionWasSynced
+      ? { ...parsed.data, skipPreflightResume: true }
+      : parsed.data;
+
     if (parsed.data.type === "session.sendText") {
       subscriber.syncedSessionIds.add(parsed.data.sessionId);
       subscriber.activeDetailSessionId = parsed.data.sessionId;
@@ -2216,12 +2235,12 @@ async function handleClientMessage(
       });
     }
 
-    const detailInvalidationSessionId = sessionIdForDetailInvalidatingCommand(parsed.data);
+    const detailInvalidationSessionId = sessionIdForDetailInvalidatingCommand(commandForRouter);
     if (detailInvalidationSessionId) {
       invalidateSessionDetailSnapshot(state, detailInvalidationSessionId);
     }
 
-    const result = await router.handle(parsed.data, (failure) => {
+    const result = await router.handle(commandForRouter, (failure) => {
       const failureEvent = {
         type: "command.failed",
         requestId: failure.requestId,

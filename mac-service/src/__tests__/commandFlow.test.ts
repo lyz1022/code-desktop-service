@@ -6022,6 +6022,51 @@ describe("command flow", () => {
     ws.terminate();
   });
 
+  it("skips preflight resume for ordinary sends after the session is already synced", async () => {
+    const context = createTestAppContext();
+    const startInputs: Record<string, unknown>[] = [];
+    context.codex.createSessionRuntime = async () =>
+      createRuntime({
+        listSessionSummaries: async () => [],
+        readSessionDetail: async () => {
+          const detail = sessionDetail("thread-synced-send");
+          detail.session.statusLabel = "idle";
+          detail.session.waitsForNextDirection = true;
+          return detail;
+        },
+        startTurn: async (input) => {
+          startInputs.push(asRecord(input));
+          return { turnId: "turn-synced-send", status: "running" };
+        }
+      });
+    server = await createServer(context);
+    await server.ready();
+    const { ws } = await openAuthedWs(context, server as TestServer);
+    const messages = collectWsMessages(ws);
+    await waitForWsMessage(messages, (message) => message.type === "sessions.snapshot");
+
+    sendCommand(ws, {
+      type: "session.sync.enable",
+      requestId: "r-sync-synced-send",
+      sessionId: "thread-synced-send",
+      activeDetail: true
+    });
+    await waitForWsMessage(messages, (message) =>
+      message.type === "thread.detail.snapshot" && message.sessionId === "thread-synced-send");
+
+    sendCommand(ws, {
+      type: "session.sendText",
+      requestId: "r-send-synced-send",
+      sessionId: "thread-synced-send",
+      clientMessageId: "m-synced-send",
+      text: "测试审批功能，发一条审批指令给我"
+    });
+
+    await waitForCondition(() => startInputs.length === 1);
+    expect(startInputs[0].skipPreflightResume).toBe(true);
+    ws.terminate();
+  });
+
   it("queues WebSocket ordinary sends when a preserved active turn exists", async () => {
     const context = createTestAppContext();
     const calls: string[] = [];
